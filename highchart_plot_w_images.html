@@ -1,0 +1,247 @@
+<script src="https://code.highcharts.com/highcharts.js"></script>
+<script src="https://code.highcharts.com/highcharts-3d.js"></script>
+<script src="https://code.highcharts.com/modules/exporting.js"></script>
+<script src="https://code.highcharts.com/modules/export-data.js"></script>
+<script
+  src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
+  integrity="sha256-3edrmyuQ0w65f8gfBsqowzjJe2iM6n0nKciPUp8y+7E="
+  crossorigin="anonymous"></script>
+
+<div id="container" style="display: flex">
+  <div id="chart"></div>
+  <div id="tooltip">
+    <img id="img1">
+    <img id="img2">
+    <div id="msd-div">
+      MSD = <span id="msd"></span>
+    </div>
+  </div>
+</div>
+
+<style>
+  #chart {
+    height: 100%;
+    flex-grow: 1;
+    margin: 0 auto;
+  }
+  #tooltip {
+    height: 100%;
+    width: 600px;
+  }
+  #msd-div {
+    text-align: center;
+    font-weight: bold;
+    font-size: 20pt;
+  }
+</style>
+
+<script>
+  // *****
+  // everything you need to edit should be in this section
+  let xAxisMin = 0
+  let xAxisMax = .05
+  let xAxisLabel = 'nu'
+  // whether to use scientific notation like 2e-6 when using this number in
+  // the hover tooltip and looking up image files
+  let xScientific = false
+
+  let yAxisMin = 0
+  let yAxisMax = 10
+  let yAxisLabel = 'dt'
+  let yScientific = false
+
+  let zAxisMin = 0
+  let zAxisMax = 10
+  let zAxisLabel = 'taur'
+  let zScientific = true
+
+  let axisLabelSize = 15
+
+  let title = 'Parameter Tuning'
+  let subtitle = 'Click and drag to rotate; hover to show images.'
+
+  // remember to change the width of #tooltip in the style section if you edit the width here
+  let imgWidth = 600
+  let imgHeight = imgWidth / 2
+
+  let chartMargin = 75
+
+  // x: nu, y: dt, z: tau_r
+  let xyz = [
+    [0.01, 0.1, 2e-6],
+    [0, 1, 2e-6],
+  ]
+
+  let msds = [11, 19]
+
+  // *****
+
+  let img1 = document.getElementById('img1')
+  let img2 = document.getElementById('img2')
+  img1.height = imgHeight
+  img1.width = imgWidth
+  img2.height = imgHeight
+  img2.width = imgWidth
+
+  let formatPoint = function(point) {
+    let formattedPoint = {}
+    formattedPoint.x = (xScientific ? point.x.toExponential() : point.x)
+    formattedPoint.y = (yScientific ? point.y.toExponential() : point.y)
+    formattedPoint.z = (zScientific ? point.z.toExponential() : point.z)
+    return formattedPoint
+  }
+
+  // Give the points a 3D feel by adding a radial gradient
+  Highcharts.setOptions({
+    colors: $.map(Highcharts.getOptions().colors, function (color) {
+      return {
+        radialGradient: {
+          cx: 0.4,
+          cy: 0.3,
+          r: 0.5
+        },
+        stops: [
+          [0, color],
+          [1, Highcharts.Color(color).brighten(-0.2).get('rgb')]
+        ]
+      };
+    })
+  });
+
+// Set up the chart
+var chart = new Highcharts.Chart({
+  chart: {
+    renderTo: 'chart',
+    margin: chartMargin,
+    type: 'scatter3d',
+    animation: false,
+    options3d: {
+      enabled: true,
+      alpha: 10,
+      beta: 30,
+      depth: 250,
+      viewDistance: 5,
+      fitToPlot: false,
+      frame: {
+        bottom: { size: 1, color: 'rgba(0,0,0,0.02)' },
+        back: { size: 1, color: 'rgba(0,0,0,0.04)' },
+        side: { size: 1, color: 'rgba(0,0,0,0.06)' }
+      }
+    }
+  },
+  title: {
+    text: title
+  },
+  subtitle: {
+    text: subtitle
+  },
+  plotOptions: {
+    scatter: {
+      width: 10,
+      height: 10,
+      depth: 10,
+    },
+    series: {
+      point: {
+        events: {
+          mouseOver: function() {
+            let img1 = document.getElementById('img1')
+            let img2 = document.getElementById('img2')
+            let msd = document.getElementById('msd')
+            let formattedPoint = formatPoint(this)
+
+            img1.src = `./imgs/nu_${formattedPoint.x}_dt_${formattedPoint.y}_taur_${formattedPoint.z}.png`
+            img2.src = `./imgs/vec_nu_${formattedPoint.x}_dt_${formattedPoint.y}_taur_${formattedPoint.z}.png`
+            msd.innerText = msds[this.index]
+          }
+        }
+      }
+    }
+  },
+  yAxis: {
+    min: yAxisMin,
+    max: yAxisMax,
+    title: {
+      text: yAxisLabel,
+      style: {
+        fontSize: `${axisLabelSize}pt`
+      }
+    }
+  },
+  xAxis: {
+    min: xAxisMin,
+    max: xAxisMax,
+    gridLineWidth: 1,
+    title: {
+      text: xAxisLabel,
+      style: {
+        fontSize: `${axisLabelSize}pt`
+      }
+    }
+  },
+  zAxis: {
+    min: zAxisMin,
+    max: zAxisMax,
+    showFirstLabel: false,
+    title: {
+      text: zAxisLabel,
+      style: {
+        fontSize: `${axisLabelSize}pt`
+      }
+    }
+  },
+  legend: {
+    enabled: false
+  },
+  series: [{
+    name: 'Parameters',
+    colorByPoint: false,
+    data: xyz
+  }],
+  tooltip: {
+    formatter: function() {
+      let formattedPoint = formatPoint(this.point)
+      return `${xAxisLabel} = ${formattedPoint.x} <br>
+      ${yAxisLabel} = ${formattedPoint.y} <br>
+      ${zAxisLabel} = ${formattedPoint.z}`
+    }
+  }
+});
+
+
+// Add mouse and touch events for rotation
+(function (H) {
+  function dragStart(eStart) {
+    eStart = chart.pointer.normalize(eStart);
+
+    var posX = eStart.chartX,
+      posY = eStart.chartY,
+      alpha = chart.options.chart.options3d.alpha,
+      beta = chart.options.chart.options3d.beta,
+      sensitivity = 5; // lower is more sensitive
+
+    function drag(e) {
+      // Get e.chartX and e.chartY
+      e = chart.pointer.normalize(e);
+
+      chart.update({
+        chart: {
+          options3d: {
+            alpha: alpha + (e.chartY - posY) / sensitivity,
+            beta: beta + (posX - e.chartX) / sensitivity
+          }
+        }
+      }, undefined, undefined, false);
+    }
+
+    chart.unbindDragMouse = H.addEvent(document, 'mousemove', drag);
+    chart.unbindDragTouch = H.addEvent(document, 'touchmove', drag);
+
+    H.addEvent(document, 'mouseup', chart.unbindDragMouse);
+    H.addEvent(document, 'touchend', chart.unbindDragTouch);
+  }
+  H.addEvent(chart.container, 'mousedown', dragStart);
+  H.addEvent(chart.container, 'touchstart', dragStart);
+}(Highcharts));
+
+</script>
