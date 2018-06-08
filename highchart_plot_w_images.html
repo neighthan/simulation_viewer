@@ -8,7 +8,7 @@
     integrity="sha256-3edrmyuQ0w65f8gfBsqowzjJe2iM6n0nKciPUp8y+7E="
     crossorigin="anonymous"></script>
   <script src="https://d3js.org/d3.v4.min.js"></script>
-  <script src="data.js"></script>
+  <script src="results/data.js"></script>
 </head>
 
 <body>
@@ -44,6 +44,14 @@
   }
   img {
     width: 100%;
+  }
+  /* see https://css-tricks.com/snippets/css/css-triangle/ */
+  #colorbar-marker {
+    width: 0;
+    height: 0;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-top: 10px solid black;
   }
 </style>
 
@@ -89,6 +97,23 @@
       cell.style.backgroundColor = colorMapper(minVal + i * (maxVal - minVal) / nCells)
     }
     colorbar.append(cell)
+  }
+
+  // marker for current position in the color bar
+  let addMarker = function(colorbarCellNum) {
+    colorbarCellNum = Math.min(colorbarCellNum + 1, nCells - 1)
+    let rect = $('#colorbar')[0].children[colorbarCellNum].getBoundingClientRect()
+    $('body').append(
+      $('<div id="colorbar-marker"></div>').css({
+        position: 'absolute',
+        top: rect.y - 10,
+        left: rect.x - 8,
+      })
+    )
+  }
+
+  let removeMarker = function(colorbarCellNum) {
+    $('#colorbar-marker').remove()
   }
 
   // data is loaded from data.js
@@ -146,7 +171,7 @@
     })
   })
 
-  var chart = new Highcharts.Chart({
+  let chart = new Highcharts.Chart({
     chart: {
       renderTo: 'chart',
       margin: chartMargin,
@@ -184,6 +209,10 @@
 
               img1.src = `./renderings_png/rendering_${index}.png`
               img2.src = `./results/vector/vector_${index}.png`
+
+              // update colorbar position
+              removeMarker()
+              addMarker(Math.floor((data[this.index][colorField] - minVal) * nCells / (maxVal - minVal)))
             }
           }
         }
