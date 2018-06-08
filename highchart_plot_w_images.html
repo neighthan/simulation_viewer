@@ -52,16 +52,8 @@
   // everything you need to edit should be in this section
 
   let xAxisLabel = 'tau_r'
-  // whether to use scientific notation like 2e-6 when using this number in
-  // the hover tooltip and looking up image files
-  let xScientific = true
-
   let yAxisLabel = 'nu'
-  let yScientific = false
-
   let zAxisLabel = 'lambda_r'
-  let zScientific = false
-
   let axisLabelSize = 15
 
   let title = 'Initial Simulation Parameter Scan'
@@ -74,6 +66,7 @@
   let colorMap = 'Cool'
   let colorField = 'msd'
 
+  // use scientific notation in the tooltip for (absolute) values smaller than this (except 0)
   let scientificNotationThresh = 1e-3
   // <<<<<
 
