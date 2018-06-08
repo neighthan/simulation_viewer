@@ -1,14 +1,17 @@
-<script src="https://code.highcharts.com/highcharts.js"></script>
-<script src="https://code.highcharts.com/highcharts-3d.js"></script>
-<script src="https://code.highcharts.com/modules/exporting.js"></script>
-<script src="https://code.highcharts.com/modules/export-data.js"></script>
-<script
-  src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
-  integrity="sha256-3edrmyuQ0w65f8gfBsqowzjJe2iM6n0nKciPUp8y+7E="
-  crossorigin="anonymous"></script>
-<script src="https://d3js.org/d3.v4.min.js"></script>
+<head>
+  <script src="https://code.highcharts.com/highcharts.js"></script>
+  <script src="https://code.highcharts.com/highcharts-3d.js"></script>
+  <script src="https://code.highcharts.com/modules/exporting.js"></script>
+  <script src="https://code.highcharts.com/modules/export-data.js"></script>
+  <script
+    src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
+    integrity="sha256-3edrmyuQ0w65f8gfBsqowzjJe2iM6n0nKciPUp8y+7E="
+    crossorigin="anonymous"></script>
+  <script src="https://d3js.org/d3.v4.min.js"></script>
+  <script src="data.js"></script>
+</head>
 
-
+<body>
 <div id="container" style="display: flex">
   <div id="chart-container">
     <div id="chart"></div>
@@ -45,22 +48,23 @@
 </style>
 
 <script>
-  // *****
+  // >>>>>
   // everything you need to edit should be in this section
-  let xAxisLabel = 'nu'
+
+  let xAxisLabel = 'tau_r'
   // whether to use scientific notation like 2e-6 when using this number in
   // the hover tooltip and looking up image files
-  let xScientific = false
+  let xScientific = true
 
-  let yAxisLabel = 'dt'
+  let yAxisLabel = 'nu'
   let yScientific = false
 
-  let zAxisLabel = 'taur'
-  let zScientific = true
+  let zAxisLabel = 'lambda_r'
+  let zScientific = false
 
   let axisLabelSize = 15
 
-  let title = 'Parameter Tuning'
+  let title = 'Initial Simulation Parameter Scan'
   let subtitle = 'Click and drag to rotate; hover to show images.'
 
   let chartMargin = 75
@@ -68,26 +72,15 @@
   // see http://bl.ocks.org/curran/3094b37e63b918bab0a06787e161607b for examples
   // not all of those are supported, though
   let colorMap = 'Cool'
+  let colorField = 'msd'
 
-  // x: nu, y: dt, z: tau_r
-  let xyz = [
-    [0.01, 0.1, 2e-6],
-    [0, 1, 2e-6],
-  ]
-
-  let msds = [11, 19] // this will be used to set the color of the points
-
-  // *****
+  let scientificNotationThresh = 1e-3
+  // <<<<<
 
   // coloring things
-  let minVal = Math.min.apply(null, msds)
-  let maxVal = Math.max.apply(null, msds)
+  let minVal = data.reduce(function (prev, next) {return prev[colorField] < next[colorField] ? prev : next})[colorField]
+  let maxVal = data.reduce(function (prev, next) {return prev[colorField] > next[colorField] ? prev : next})[colorField]
   let colorMapper = d3.scaleSequential(d3[`interpolate${colorMap}`]).domain([minVal, maxVal])
-
-  for (let i in xyz) {
-    p = xyz[i]
-    xyz[i] = {x: p[0], y: p[1], z: p[2], color: colorMapper(msds[i])}
-  }
 
   // add the color bar
   let nCells = 150
@@ -105,12 +98,42 @@
     colorbar.append(cell)
   }
 
-  let formatPoint = function(point) {
-    let formattedPoint = {}
-    formattedPoint.x = (xScientific ? point.x.toExponential() : point.x)
-    formattedPoint.y = (yScientific ? point.y.toExponential() : point.y)
-    formattedPoint.z = (zScientific ? point.z.toExponential() : point.z)
-    return formattedPoint
+  // data is loaded from data.js
+  for (let datum of data) {
+    datum.x = datum[xAxisLabel]
+    datum.y = datum[yAxisLabel]
+    datum.z = datum[zAxisLabel]
+    datum.color = colorMapper(datum[colorField])
+  }
+
+  /**
+   * List the x, y, and z fields first, the `colorField` last and bolded, and all others
+   * in arbitrary order in between.
+   **/
+  let getTooltip = function(point) {
+    let datum = data[point.index]
+    let tooltip = `
+      ${xAxisLabel} = ${scientific(point.x)} <br>
+      ${yAxisLabel} = ${scientific(point.y)} <br>
+      ${zAxisLabel} = ${scientific(point.z)} <br>`
+
+    let specialFields = [xAxisLabel, yAxisLabel, zAxisLabel, colorField, 'x', 'y', 'z', 'color']
+    for (let field in datum) {
+      if (!specialFields.includes(field)) {
+        tooltip += `${field} = ${scientific(datum[field])} <br>`
+      }
+    }
+
+    tooltip += `<b>${colorField} = ${scientific(datum[colorField])}</b>`
+    return tooltip
+  }
+
+  let scientific = function(n) {
+    if (n == 0) {
+      return n
+    } else {
+      return Math.abs(n) <= scientificNotationThresh ? n.toExponential() : n
+    }
   }
 
   // Give the points a 3D feel by adding a radial gradient
@@ -163,10 +186,11 @@
             mouseOver: function() {
               let img1 = document.getElementById('img1')
               let img2 = document.getElementById('img2')
-              let formattedPoint = formatPoint(this)
 
-              img1.src = `./imgs/nu_${formattedPoint.x}_dt_${formattedPoint.y}_taur_${formattedPoint.z}.png`
-              img2.src = `./imgs/vec_nu_${formattedPoint.x}_dt_${formattedPoint.y}_taur_${formattedPoint.z}.png`
+              let index = this.index.toString().padStart(6, '0')
+
+              img1.src = `./renderings_png/rendering_${index}.png`
+              img2.src = `./results/vector/vector_${index}.png`
             }
           }
         }
@@ -204,16 +228,12 @@
     series: [{
       name: 'Parameters',
       colorByPoint: false,
-      data: xyz
+      data: data
     }],
     tooltip: {
       useHTML: true,
       formatter: function() {
-        let formattedPoint = formatPoint(this.point)
-        return `${xAxisLabel} = ${formattedPoint.x} <br>
-        ${yAxisLabel} = ${formattedPoint.y} <br>
-        ${zAxisLabel} = ${formattedPoint.z} <br>
-        <b>MSD = ${msds[this.point.index]}</b>`
+        return getTooltip(this.point)
       }
     }
   })
@@ -254,3 +274,4 @@
     H.addEvent(chart.container, 'touchstart', dragStart)
   }(Highcharts))
 </script>
+</body>
