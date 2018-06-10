@@ -1,3 +1,5 @@
+<!DOCTYPE html>
+<html>
 <head>
   <script src="https://code.highcharts.com/highcharts.js"></script>
   <script src="https://code.highcharts.com/highcharts-3d.js"></script>
@@ -135,7 +137,13 @@
       ${yAxisLabel} = ${scientific(point.y)} <br>
       ${zAxisLabel} = ${scientific(point.z)} <br>`
 
-    let specialFields = [xAxisLabel, yAxisLabel, zAxisLabel, colorField, 'x', 'y', 'z', 'color']
+    // these won't be added to the tooltip in the for loop below
+    let specialFields = [
+      xAxisLabel, yAxisLabel, zAxisLabel, colorField,
+      'x', 'y', 'z', 'color',
+      'vecFilepath', 'finaltimeFilepath'
+    ]
+
     for (let field in datum) {
       if (!specialFields.includes(field)) {
         tooltip += `${field} = ${scientific(datum[field])} <br>`
@@ -207,8 +215,8 @@
 
               let index = this.index.toString().padStart(6, '0')
 
-              img1.src = `./renderings_png/rendering_${index}.png`
-              img2.src = `./results/vector/vector_${index}.png`
+              img1.src = data[this.index].finaltimeFilepath
+              img2.src = data[this.index].vecFilepath
 
               // update colorbar position
               removeMarker()
@@ -297,3 +305,4 @@
   }(Highcharts))
 </script>
 </body>
+</html>
