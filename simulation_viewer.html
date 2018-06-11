@@ -18,6 +18,7 @@
   <div id="chart-container">
     <div id="chart"></div>
     <div id="colorbar"></div>
+    <p id="colorbar-label"></p>
   </div>
   <div id="tooltip">
     <img id="img1">
@@ -54,6 +55,12 @@
     border-left: 10px solid transparent;
     border-right: 10px solid transparent;
     border-top: 10px solid black;
+  }
+  #colorbar-label {
+    text-align: center;
+    font-size: 20px;
+    font-weight: bold;
+    margin-top: 5px;
   }
 </style>
 
@@ -100,6 +107,7 @@
     }
     colorbar.append(cell)
   }
+  $('#colorbar-label')[0].innerText = colorField
 
   // marker for current position in the color bar
   let addMarker = function(colorbarCellNum) {
