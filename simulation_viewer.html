@@ -1,6 +1,12 @@
+<!-- TODO: make the color field editable too -->
 <!DOCTYPE html>
 <html>
 <head>
+  <link href='https://fonts.googleapis.com/css?family=Roboto:300,400,500,700|Material+Icons' rel="stylesheet">
+  <link href="https://unpkg.com/vuetify/dist/vuetify.min.css" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
+  <script src="https://unpkg.com/vue/dist/vue.js"></script>
+  <script src="https://unpkg.com/vuetify/dist/vuetify.js"></script>
   <script src="https://code.highcharts.com/highcharts.js"></script>
   <script src="https://code.highcharts.com/highcharts-3d.js"></script>
   <script src="https://code.highcharts.com/modules/exporting.js"></script>
@@ -19,6 +25,57 @@
     <div id="chart"></div>
     <div id="colorbar"></div>
     <p id="colorbar-label"></p>
+    <v-app id="app">
+      <v-btn @click.stop="dialog = true">Configure</v-btn>
+      <v-dialog v-model="dialog" max-width="500px">
+          <v-card>
+            <v-card-title>
+              Plot Options
+            </v-card-title>
+            <v-card-text>
+              <v-layout row>
+              <v-select
+                :items="axisOptions"
+                label="X axis"
+                v-model="xAxisInput"
+              ></v-select>
+              <v-checkbox :label="'Logarithmic'" v-model='xAxisLogarithmic'></v-checkbox>
+              </v-layout>
+
+              <v-layout row>
+              <v-select
+              :items="axisOptions"
+              label="Y axis"
+              v-model="yAxisInput"
+              ></v-select>
+              <v-checkbox :label="'Logarithmic'" v-model='yAxisLogarithmic'></v-checkbox>
+              </v-layout>
+
+              <v-layout row>
+              <v-select
+              :items="axisOptions"
+              label="Z axis"
+              v-model="zAxisInput"
+              ></v-select>
+              <v-checkbox :label="'Logarithmic'" v-model='zAxisLogarithmic'></v-checkbox>
+              </v-layout>
+
+              <v-layout row>
+              <v-select
+              :items="axisOptions"
+              label="Color"
+              v-model="colorInput"
+              ></v-select>
+              <!-- TODO: set min and max color values in small text fields here (if nothing set, use min and max of the data) -->
+              <!-- ooh, once they select a color field, have the min and max text fields populate with the min and max values of the data? if that's easy -->
+              </v-layout>
+            </v-card-text>
+            <v-card-actions>
+              <v-btn color="primary" flat @click.stop="closedDialog()">Close</v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+    </v-app>
   </div>
   <div id="tooltip">
     <img id="img1">
@@ -127,12 +184,17 @@
   }
 
   // data is loaded from data.js
-  for (let datum of data) {
-    datum.x = datum[xAxisLabel]
-    datum.y = datum[yAxisLabel]
-    datum.z = datum[zAxisLabel]
-    datum.color = colorMapper(datum[colorField])
+  let addXYZCToData = function(data, xLabel, yLabel, zLabel, colorLabel) {
+    for (let datum of data) {
+      datum.x = datum[xLabel]
+      datum.y = datum[yLabel]
+      datum.z = datum[zLabel]
+      datum.color = colorMapper(datum[colorLabel])
+    }
   }
+
+  // TODO: change this to just use the first four fields
+  addXYZCToData(data, xAxisLabel, yAxisLabel, zAxisLabel, colorField)
 
   /**
    * List the x, y, and z fields first, the `colorField` last and bolded, and all others
@@ -311,6 +373,32 @@
     H.addEvent(chart.container, 'mousedown', dragStart)
     H.addEvent(chart.container, 'touchstart', dragStart)
   }(Highcharts))
+
+  let vue = new Vue({
+    el: "#app",
+    data: {
+      dialog: false,
+      axisOptions: Object.keys(data[0]).filter(x => !(['x', 'y', 'z', 'color', 'vecFilepath', 'finaltimeFilepath'].includes(x))),
+      // TODO: prepopulate with current x, y, z, and color fields
+      xAxisInput: '',
+      yAxisInput: '',
+      zAxisInput: '',
+      colorInput: '',
+      xAxisLogarithmic: false,
+      yAxisLogarithmic: false,
+      zAxisLogarithmic: false,
+    },
+    methods: {
+      closedDialog: function() {
+        this.dialog = false
+        // update the plot
+        // TODO: need to make a new color mapper because if the colorInput changed, it's range will be different.
+        addXYZCToData(data, this.xAxisInput, this.yAxisInput, this.zAxisInput, this.colorInput)
+        chart.series[0].setData(data)
+        chart.redraw()
+      }
+    }
+  })
 </script>
 </body>
 </html>
