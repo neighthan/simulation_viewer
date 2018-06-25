@@ -11,6 +11,16 @@
     crossorigin="anonymous"></script>
   <script src="https://d3js.org/d3.v4.min.js"></script>
   <script src="results/data.js"></script>
+  <p align="left">
+    <select id="data_filter">
+      <option value="0">-select data filter-</option>
+      <option value="default">default</option>
+      <option value="various_nu">various nu, tau_r = 1e-3, lambda_r = 1.75</option>
+      <option value="various_dt_nu_0">various dt, nu = 0</option>
+      <option value="various_dt_nu_0.005">various dt, nu = 0.005</option>
+      <option value="drag_factors">drag factors comparison</option>
+  </select>
+  </p>
 </head>
 
 <body>
@@ -22,6 +32,7 @@
   <div id="tooltip">
     <img id="img1">
     <img id="img2">
+    <img id="img3">
     </div>
   </div>
 </div>
@@ -45,7 +56,8 @@
     flex: 1 1 0px;
   }
   img {
-    width: 100%;
+    width: 65%;
+    margin: 0 0
   }
   /* see https://css-tricks.com/snippets/css/css-triangle/ */
   #colorbar-marker {
@@ -59,14 +71,22 @@
 
 <script>
   // >>>>>
-  // everything you need to edit should be in this section
 
-  let xAxisLabel = 'tau_r'
-  let yAxisLabel = 'nu'
-  let zAxisLabel = 'lambda_r'
+  let xAxisLabel
+  let yAxisLabel
+  let zAxisLabel
+
+  let xAxisType
+  let yAxisType
+  let zAxisType
+
+  //colorbar limits
+  let minVal = 7
+  let maxVal = 22
+
   let axisLabelSize = 15
 
-  let title = 'Initial Simulation Parameter Scan'
+  let title
   let subtitle = 'Click and drag to rotate; hover to show images.'
 
   let chartMargin = 75
@@ -78,11 +98,12 @@
 
   // use scientific notation in the tooltip for (absolute) values smaller than this (except 0)
   let scientificNotationThresh = 1e-3
+
+  // set data:
+  let data
   // <<<<<
 
   // coloring things
-  let minVal = data.reduce(function (prev, next) {return prev[colorField] < next[colorField] ? prev : next})[colorField]
-  let maxVal = data.reduce(function (prev, next) {return prev[colorField] > next[colorField] ? prev : next})[colorField]
   let colorMapper = d3.scaleSequential(d3[`interpolate${colorMap}`]).domain([minVal, maxVal])
 
   // add the color bar
@@ -118,191 +139,277 @@
     $('#colorbar-marker').remove()
   }
 
-  // data is loaded from data.js
-  for (let datum of data) {
-    datum.x = datum[xAxisLabel]
-    datum.y = datum[yAxisLabel]
-    datum.z = datum[zAxisLabel]
-    datum.color = colorMapper(datum[colorField])
-  }
+  function chartRenderer(data, xAxisLabel, yAxisLabel, zAxisLabel, xAxisType, yAxisType, zAxisType, title) {
+    // data is loaded from data.js
+    for (let datum of data) {
+      datum.x = datum[xAxisLabel]
+      datum.y = datum[yAxisLabel]
+      datum.z = datum[zAxisLabel]
+      datum.color = colorMapper(Math.max(minVal, Math.min(maxVal, datum[colorField])))
+    }
 
-  /**
-   * List the x, y, and z fields first, the `colorField` last and bolded, and all others
-   * in arbitrary order in between.
-   **/
-  let getTooltip = function(point) {
-    let datum = data[point.index]
-    let tooltip = `
-      ${xAxisLabel} = ${scientific(point.x)} <br>
-      ${yAxisLabel} = ${scientific(point.y)} <br>
-      ${zAxisLabel} = ${scientific(point.z)} <br>`
+    /**
+     * List the x, y, and z fields first, the `colorField` last and bolded, and all others
+     * in arbitrary order in between.
+     **/
+    let getTooltip = function(point) {
+      let datum = data[point.index]
+      let tooltip = `
+        ${xAxisLabel} = ${scientific(point.x)} <br>
+        ${yAxisLabel} = ${scientific(point.y)} <br>
+        ${zAxisLabel} = ${scientific(point.z)} <br>`
 
-    // these won't be added to the tooltip in the for loop below
-    let specialFields = [
-      xAxisLabel, yAxisLabel, zAxisLabel, colorField,
-      'x', 'y', 'z', 'color',
-      'vecFilepath', 'finaltimeFilepath'
-    ]
+      // these won't be added to the tooltip in the for loop below
+      let specialFields = [
+        xAxisLabel, yAxisLabel, zAxisLabel, colorField,
+        'x', 'y', 'z', 'color',
+        'old_drag_factors', 'index', 'sim_number',
+        'vary_nu_trial_numbers',
+        'vecFilepath', 'finaltimeFilepath', 'potentialFilepath'
+      ]
 
-    for (let field in datum) {
-      if (!specialFields.includes(field)) {
-        tooltip += `${field} = ${scientific(datum[field])} <br>`
+      for (let field in datum) {
+        if (!specialFields.includes(field)) {
+          tooltip += `${field} = ${scientific(datum[field])} <br>`
+        }
+      }
+
+      tooltip += `<b>${colorField} = ${scientific(datum[colorField])}</b>`
+      return tooltip
+    }
+
+    let scientific = function(n) {
+      if (n == 0) {
+        return n
+      } else {
+        return Math.abs(n) <= scientificNotationThresh ? n.toExponential() : n
       }
     }
 
-    tooltip += `<b>${colorField} = ${scientific(datum[colorField])}</b>`
-    return tooltip
-  }
+    // Give the points a 3D feel by adding a radial gradient
+    Highcharts.setOptions({
+      colors: $.map(Highcharts.getOptions().colors, function (color) {
+        return {
+          radialGradient: {
+            cx: 0.4,
+            cy: 0.3,
+            r: 0.5
+          },
+          stops: [
+            [0, color],
+            [1, Highcharts.Color(color).brighten(-0.2).get('rgb')]
+          ]
+        }
+      })
+    })
 
-  let scientific = function(n) {
-    if (n == 0) {
-      return n
-    } else {
-      return Math.abs(n) <= scientificNotationThresh ? n.toExponential() : n
-    }
-  }
+    let chart = new Highcharts.Chart({
+      chart: {
+        renderTo: 'chart',
+        margin: chartMargin,
+        type: 'scatter3d',
+        animation: false,
+        options3d: {
+          enabled: true,
+          alpha: 10,
+          beta: 30,
+          depth: 250,
+          viewDistance: 5,
+          fitToPlot: false,
+          frame: {
+            bottom: { size: 1, color: 'rgba(0,0,0,0.02)' },
+            back: { size: 1, color: 'rgba(0,0,0,0.04)' },
+            side: { size: 1, color: 'rgba(0,0,0,0.06)' }
+          }
+        }
+      },
+      title: {
+        text: title
+      },
+      subtitle: {
+        text: subtitle
+      },
+      plotOptions: {
+        series: {
+          point: {
+            events: {
+              mouseOver: function() {
+                let img1 = document.getElementById('img1')
+                let img2 = document.getElementById('img2')
+                let img3 = document.getElementById('img3')
 
-  // Give the points a 3D feel by adding a radial gradient
-  Highcharts.setOptions({
-    colors: $.map(Highcharts.getOptions().colors, function (color) {
-      return {
-        radialGradient: {
-          cx: 0.4,
-          cy: 0.3,
-          r: 0.5
-        },
-        stops: [
-          [0, color],
-          [1, Highcharts.Color(color).brighten(-0.2).get('rgb')]
-        ]
+                let index = this.index.toString().padStart(6, '0')
+
+                img1.src = data[this.index].finaltimeFilepath
+                img2.src = data[this.index].vecFilepath
+                img3.src = data[this.index].potentialFilepath
+
+                // update colorbar position
+                removeMarker()
+                addMarker(Math.floor((data[this.index][colorField] - minVal) * nCells / (maxVal - minVal)))
+              }
+            }
+          }
+        }
+      },
+      yAxis: {
+        type: yAxisType,
+        title: {
+          text: yAxisLabel,
+          style: {
+            fontSize: `${axisLabelSize}pt`
+          }
+        }
+      },
+      xAxis: {
+        gridLineWidth: 1,
+        type: xAxisType,
+        title: {
+          text: xAxisLabel,
+          style: {
+            fontSize: `${axisLabelSize}pt`
+          }
+        }
+      },
+      zAxis: {
+        showFirstLabel: false,
+        type: zAxisType,
+        title: {
+          text: zAxisLabel,
+          style: {
+            fontSize: `${axisLabelSize}pt`
+          }
+        }
+      },
+      legend: {
+        enabled: false
+      },
+      series: [{
+        name: 'Parameters',
+        colorByPoint: false,
+        data: data
+      }],
+      tooltip: {
+        useHTML: true,
+        formatter: function() {
+          return getTooltip(this.point)
+        }
       }
     })
-  })
 
-  let chart = new Highcharts.Chart({
-    chart: {
-      renderTo: 'chart',
-      margin: chartMargin,
-      type: 'scatter3d',
-      animation: false,
-      options3d: {
-        enabled: true,
-        alpha: 10,
-        beta: 30,
-        depth: 250,
-        viewDistance: 5,
-        fitToPlot: false,
-        frame: {
-          bottom: { size: 1, color: 'rgba(0,0,0,0.02)' },
-          back: { size: 1, color: 'rgba(0,0,0,0.04)' },
-          side: { size: 1, color: 'rgba(0,0,0,0.06)' }
-        }
-      }
-    },
-    title: {
-      text: title
-    },
-    subtitle: {
-      text: subtitle
-    },
-    plotOptions: {
-      series: {
-        point: {
-          events: {
-            mouseOver: function() {
-              let img1 = document.getElementById('img1')
-              let img2 = document.getElementById('img2')
+    // Add mouse and touch events for rotation
+    ;(function (H) {
+      function dragStart(eStart) {
+        eStart = chart.pointer.normalize(eStart)
 
-              let index = this.index.toString().padStart(6, '0')
+        var posX = eStart.chartX,
+          posY = eStart.chartY,
+          alpha = chart.options.chart.options3d.alpha,
+          beta = chart.options.chart.options3d.beta,
+          sensitivity = 5 // lower is more sensitive
 
-              img1.src = data[this.index].finaltimeFilepath
-              img2.src = data[this.index].vecFilepath
+        function drag(e) {
+          // Get e.chartX and e.chartY
+          e = chart.pointer.normalize(e)
 
-              // update colorbar position
-              removeMarker()
-              addMarker(Math.floor((data[this.index][colorField] - minVal) * nCells / (maxVal - minVal)))
+          chart.update({
+            chart: {
+              options3d: {
+                alpha: alpha + (e.chartY - posY) / sensitivity,
+                beta: beta + (posX - e.chartX) / sensitivity
+              }
             }
-          }
+          }, undefined, undefined, false)
         }
-      }
-    },
-    yAxis: {
-      title: {
-        text: yAxisLabel,
-        style: {
-          fontSize: `${axisLabelSize}pt`
-        }
-      }
-    },
-    xAxis: {
-      gridLineWidth: 1,
-      title: {
-        text: xAxisLabel,
-        style: {
-          fontSize: `${axisLabelSize}pt`
-        }
-      }
-    },
-    zAxis: {
-      showFirstLabel: false,
-      title: {
-        text: zAxisLabel,
-        style: {
-          fontSize: `${axisLabelSize}pt`
-        }
-      }
-    },
-    legend: {
-      enabled: false
-    },
-    series: [{
-      name: 'Parameters',
-      colorByPoint: false,
-      data: data
-    }],
-    tooltip: {
-      useHTML: true,
-      formatter: function() {
-        return getTooltip(this.point)
-      }
-    }
-  })
 
-  // Add mouse and touch events for rotation
-  ;(function (H) {
-    function dragStart(eStart) {
-      eStart = chart.pointer.normalize(eStart)
+        chart.unbindDragMouse = H.addEvent(document, 'mousemove', drag)
+        chart.unbindDragTouch = H.addEvent(document, 'touchmove', drag)
 
-      var posX = eStart.chartX,
-        posY = eStart.chartY,
-        alpha = chart.options.chart.options3d.alpha,
-        beta = chart.options.chart.options3d.beta,
-        sensitivity = 5 // lower is more sensitive
-
-      function drag(e) {
-        // Get e.chartX and e.chartY
-        e = chart.pointer.normalize(e)
-
-        chart.update({
-          chart: {
-            options3d: {
-              alpha: alpha + (e.chartY - posY) / sensitivity,
-              beta: beta + (posX - e.chartX) / sensitivity
-            }
-          }
-        }, undefined, undefined, false)
+        H.addEvent(document, 'mouseup', chart.unbindDragMouse)
+        H.addEvent(document, 'touchend', chart.unbindDragTouch)
       }
 
-      chart.unbindDragMouse = H.addEvent(document, 'mousemove', drag)
-      chart.unbindDragTouch = H.addEvent(document, 'touchmove', drag)
+      H.addEvent(chart.container, 'mousedown', dragStart)
+      H.addEvent(chart.container, 'touchstart', dragStart)
+    }(Highcharts))
 
-      H.addEvent(document, 'mouseup', chart.unbindDragMouse)
-      H.addEvent(document, 'touchend', chart.unbindDragTouch)
-    }
+    return
+  }
 
-    H.addEvent(chart.container, 'mousedown', dragStart)
-    H.addEvent(chart.container, 'touchstart', dragStart)
-  }(Highcharts))
+  //dropdown menu
+  $("#data_filter").change(function() {
+      data_filter = $("#data_filter option:selected").val()
+
+      switch (data_filter) {
+        case "default":
+          xAxisLabel = 'tau_r'
+          yAxisLabel = 'nu'
+          zAxisLabel = 'lambda_r'
+
+          xAxisType = 'logarithmic'
+          yAxisType = 'linear'
+          zAxisType = 'linear'
+
+          title = 'tau_r vs lambda_r vs nu scan'
+
+          data = data_default
+          break
+        case "various_nu":
+          xAxisLabel = 'vary_nu_trial_numbers'
+          yAxisLabel = 'nu'
+          zAxisLabel = 'lambda_r'
+
+          xAxisType = 'linear'
+          yAxisType = 'logarithmic'
+          zAxisType = 'linear'
+
+          title = 'various nu scans for tau_r = 1e-3, lambda_r = 1.75'
+
+          data = data_various_nu
+          break
+        case "various_dt_nu_0":
+          xAxisLabel = 'tau_r'
+          yAxisLabel = 'dt'
+          zAxisLabel = 'lambda_r'
+
+          xAxisType = 'logarithmic'
+          yAxisType = 'logarithmic'
+          zAxisType = 'linear'
+
+          title = 'various dt scans for nu = 0'
+
+          data = data_various_dt_nu_0
+          break
+        case "various_dt_nu_0.005":
+        xAxisLabel = 'tau_r'
+          yAxisLabel = 'dt'
+          zAxisLabel = 'lambda_r'
+
+          xAxisType = 'logarithmic'
+          yAxisType = 'logarithmic'
+          zAxisType = 'linear'
+
+          title = 'various dt scans for nu = 0.005'
+
+          data = data_various_dt_nu_0_005
+          break
+        case "drag_factors":
+          xAxisLabel = 'tau_r'
+          yAxisLabel = 'old_drag_factors'
+          zAxisLabel = 'lambda_r'
+
+          xAxisType = 'logarithmic'
+          yAxisType = 'linear'
+          zAxisType = 'linear'
+
+          title = 'drag factor comparison for nu = 0'
+
+          data = data_drag_factors
+          break
+      }
+
+      chartRenderer(data, xAxisLabel, yAxisLabel, zAxisLabel, xAxisType, yAxisType, zAxisType, title)
+  });
 </script>
 </body>
 </html>
