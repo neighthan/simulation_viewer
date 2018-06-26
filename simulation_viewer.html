@@ -1,10 +1,9 @@
-<!-- TODO: make the color field editable too -->
 <!DOCTYPE html>
 <html>
 <head>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
   <link href='https://fonts.googleapis.com/css?family=Roboto:300,400,500,700|Material+Icons' rel="stylesheet">
   <link href="https://unpkg.com/vuetify/dist/vuetify.min.css" rel="stylesheet">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
   <script src="https://unpkg.com/vue/dist/vue.js"></script>
   <script src="https://unpkg.com/vuetify/dist/vuetify.js"></script>
   <script src="https://code.highcharts.com/highcharts.js"></script>
@@ -37,34 +36,34 @@
               <v-select
                 :items="axisOptions"
                 label="X axis"
-                v-model="xAxisInput"
+                v-model="xField"
               ></v-select>
               <v-checkbox :label="'Logarithmic'" v-model='xAxisLogarithmic'></v-checkbox>
               </v-layout>
 
               <v-layout row>
               <v-select
-              :items="axisOptions"
-              label="Y axis"
-              v-model="yAxisInput"
+                :items="axisOptions"
+                label="Y axis"
+                v-model="yField"
               ></v-select>
               <v-checkbox :label="'Logarithmic'" v-model='yAxisLogarithmic'></v-checkbox>
               </v-layout>
 
               <v-layout row>
               <v-select
-              :items="axisOptions"
-              label="Z axis"
-              v-model="zAxisInput"
+                :items="axisOptions"
+                label="Z axis"
+                v-model="zField"
               ></v-select>
               <v-checkbox :label="'Logarithmic'" v-model='zAxisLogarithmic'></v-checkbox>
               </v-layout>
 
               <v-layout row>
               <v-select
-              :items="axisOptions"
-              label="Color"
-              v-model="colorInput"
+                :items="axisOptions"
+                label="Color"
+                v-model="colorField"
               ></v-select>
               <!-- TODO: set min and max color values in small text fields here (if nothing set, use min and max of the data) -->
               <!-- ooh, once they select a color field, have the min and max text fields populate with the min and max values of the data? if that's easy -->
@@ -80,6 +79,7 @@
   <div id="tooltip">
     <img id="img1">
     <img id="img2">
+    <img id="img3">
     </div>
   </div>
 </div>
@@ -103,7 +103,8 @@
     flex: 1 1 0px;
   }
   img {
-    width: 100%;
+    width: 65%;
+    margin: 0 0
   }
   /* see https://css-tricks.com/snippets/css/css-triangle/ */
   #colorbar-marker {
@@ -123,14 +124,9 @@
 
 <script>
   // >>>>>
-  // everything you need to edit should be in this section
-
-  let xAxisLabel = 'tau_r'
-  let yAxisLabel = 'nu'
-  let zAxisLabel = 'lambda_r'
   let axisLabelSize = 15
 
-  let title = 'Initial Simulation Parameter Scan'
+  let title = ''
   let subtitle = 'Click and drag to rotate; hover to show images.'
 
   let chartMargin = 75
@@ -138,37 +134,36 @@
   // see http://bl.ocks.org/curran/3094b37e63b918bab0a06787e161607b for examples
   // not all of those are supported, though
   let colorMap = 'Cool'
-  let colorField = 'msd'
 
   // use scientific notation in the tooltip for (absolute) values smaller than this (except 0)
   let scientificNotationThresh = 1e-3
   // <<<<<
 
-  // coloring things
-  let minVal = data.reduce(function (prev, next) {return prev[colorField] < next[colorField] ? prev : next})[colorField]
-  let maxVal = data.reduce(function (prev, next) {return prev[colorField] > next[colorField] ? prev : next})[colorField]
-  let colorMapper = d3.scaleSequential(d3[`interpolate${colorMap}`]).domain([minVal, maxVal])
+  // coloring thingsvue
+  let nColorbarCells = 150
 
-  // add the color bar
-  let nCells = 150
-  let colorbar = $('#colorbar')
-  for (let i = -1; i <= nCells; i++) {
-    let cell = document.createElement('div')
-    cell.className = 'colorbar-cell'
-    if (i == -1) {
-      cell.innerText = minVal
-    } else if (i == nCells) {
-      cell.innerText = maxVal
-    } else {
-      cell.style.backgroundColor = colorMapper(minVal + i * (maxVal - minVal) / nCells)
+  let addColorbar = function(config) {
+    let colorbar = $('#colorbar')
+    colorbar.empty() // remove existing color bar
+
+    for (let i = -1; i <= nColorbarCells; i++) {
+      let cell = document.createElement('div')
+      cell.className = 'colorbar-cell'
+      if (i == -1) {
+        cell.innerText = config.colorMin
+      } else if (i == nColorbarCells) {
+        cell.innerText = config.colorMax
+      } else {
+        cell.style.backgroundColor = config.colorMapper(config.colorMin + i * (config.colorMax - config.colorMin) / nColorbarCells)
+      }
+      colorbar.append(cell)
     }
-    colorbar.append(cell)
+    $('#colorbar-label')[0].innerText = config.colorField
   }
-  $('#colorbar-label')[0].innerText = colorField
 
   // marker for current position in the color bar
   let addMarker = function(colorbarCellNum) {
-    colorbarCellNum = Math.min(colorbarCellNum + 1, nCells - 1)
+    colorbarCellNum = Math.min(colorbarCellNum + 1, nColorbarCells - 1)
     let rect = $('#colorbar')[0].children[colorbarCellNum].getBoundingClientRect()
     $('body').append(
       $('<div id="colorbar-marker"></div>').css({
@@ -179,39 +174,38 @@
     )
   }
 
-  let removeMarker = function(colorbarCellNum) {
+  let removeMarker = function() {
     $('#colorbar-marker').remove()
   }
 
   // data is loaded from data.js
-  let addXYZCToData = function(data, xLabel, yLabel, zLabel, colorLabel) {
+  let addXYZCToData = function(config, data) {
     for (let datum of data) {
-      datum.x = datum[xLabel]
-      datum.y = datum[yLabel]
-      datum.z = datum[zLabel]
-      datum.color = colorMapper(datum[colorLabel])
+      datum.x = datum[config.xField]
+      datum.y = datum[config.yField]
+      datum.z = datum[config.zField]
+      datum.color = config.colorMapper(Math.max(config.colorMin, Math.min(config.colorMax, datum[config.colorField])))
     }
   }
-
-  // TODO: change this to just use the first four fields
-  addXYZCToData(data, xAxisLabel, yAxisLabel, zAxisLabel, colorField)
 
   /**
    * List the x, y, and z fields first, the `colorField` last and bolded, and all others
    * in arbitrary order in between.
    **/
-  let getTooltip = function(point) {
+  let getTooltip = function(config, point) {
     let datum = data[point.index]
     let tooltip = `
-      ${xAxisLabel} = ${scientific(point.x)} <br>
-      ${yAxisLabel} = ${scientific(point.y)} <br>
-      ${zAxisLabel} = ${scientific(point.z)} <br>`
+      ${config.xField} = ${scientific(point.x)} <br>
+      ${config.yField} = ${scientific(point.y)} <br>
+      ${config.zField} = ${scientific(point.z)} <br>`
 
     // these won't be added to the tooltip in the for loop below
     let specialFields = [
-      xAxisLabel, yAxisLabel, zAxisLabel, colorField,
+      config.xField, config.yField, config.zField, config.colorField,
       'x', 'y', 'z', 'color',
-      'vecFilepath', 'finaltimeFilepath'
+      'old_drag_factors', 'index', 'sim_number',
+      'vary_nu_trial_numbers',
+      'vecFilepath', 'finaltimeFilepath', 'potentialFilepath'
     ]
 
     for (let field in datum) {
@@ -220,7 +214,7 @@
       }
     }
 
-    tooltip += `<b>${colorField} = ${scientific(datum[colorField])}</b>`
+    tooltip += `<b>${config.colorField} = ${scientific(datum[config.colorField])}</b>`
     return tooltip
   }
 
@@ -232,173 +226,198 @@
     }
   }
 
-  // Give the points a 3D feel by adding a radial gradient
-  Highcharts.setOptions({
-    colors: $.map(Highcharts.getOptions().colors, function (color) {
-      return {
-        radialGradient: {
-          cx: 0.4,
-          cy: 0.3,
-          r: 0.5
-        },
-        stops: [
-          [0, color],
-          [1, Highcharts.Color(color).brighten(-0.2).get('rgb')]
-        ]
+  function chartRenderer(config) {
+    addXYZCToData(config, data)
+
+    // Give the points a 3D feel by adding a radial gradient
+    Highcharts.setOptions({
+      colors: $.map(Highcharts.getOptions().colors, function (color) {
+        return {
+          radialGradient: {
+            cx: 0.4,
+            cy: 0.3,
+            r: 0.5
+          },
+          stops: [
+            [0, color],
+            [1, Highcharts.Color(color).brighten(-0.2).get('rgb')]
+          ]
+        }
+      })
+    })
+
+    let chart = new Highcharts.Chart({
+      chart: {
+        renderTo: 'chart',
+        margin: chartMargin,
+        type: 'scatter3d',
+        animation: false,
+        options3d: {
+          enabled: true,
+          alpha: 10,
+          beta: 30,
+          depth: 250,
+          viewDistance: 5,
+          fitToPlot: false,
+          frame: {
+            bottom: { size: 1, color: 'rgba(0,0,0,0.02)' },
+            back: { size: 1, color: 'rgba(0,0,0,0.04)' },
+            side: { size: 1, color: 'rgba(0,0,0,0.06)' }
+          }
+        }
+      },
+      title: {
+        text: title
+      },
+      subtitle: {
+        text: subtitle
+      },
+      plotOptions: {
+        series: {
+          point: {
+            events: {
+              mouseOver: function() {
+                let img1 = document.getElementById('img1')
+                let img2 = document.getElementById('img2')
+                let img3 = document.getElementById('img3')
+
+                let index = this.index.toString().padStart(6, '0')
+
+                img1.src = data[this.index].finaltimeFilepath
+                img2.src = data[this.index].vecFilepath
+                img3.src = data[this.index].potentialFilepath
+
+                // update colorbar position
+                removeMarker()
+                // TODO: add marker back...
+                // addMarker(Math.floor((data[this.index][config.colorField] - config.colorMin) * nColorbarCells / (config.colorMax - config.colorMin)))
+              }
+            }
+          }
+        }
+      },
+      xAxis: {
+        gridLineWidth: 1,
+        type: config.xAxisLogarithmic ? 'logarithmic' : 'linear',
+        title: {
+          text: config.xField,
+          style: {
+            fontSize: `${axisLabelSize}pt`
+          }
+        }
+      },
+      yAxis: {
+        type: config.yAxisLogarithmic ? 'logarithmic' : 'linear',
+        title: {
+          text: config.yField,
+          style: {
+            fontSize: `${axisLabelSize}pt`
+          }
+        }
+      },
+      zAxis: {
+        showFirstLabel: false,
+        type: config.zAxisLogarithmic ? 'logarithmic' : 'linear',
+        title: {
+          text: config.zField,
+          style: {
+            fontSize: `${axisLabelSize}pt`
+          }
+        }
+      },
+      legend: {
+        enabled: false
+      },
+      series: [{
+        name: 'Parameters',
+        colorByPoint: false,
+        data: data
+      }],
+      tooltip: {
+        useHTML: true,
+        formatter: function() {
+          return getTooltip(config, this.point)
+        }
       }
     })
-  })
 
-  let chart = new Highcharts.Chart({
-    chart: {
-      renderTo: 'chart',
-      margin: chartMargin,
-      type: 'scatter3d',
-      animation: false,
-      options3d: {
-        enabled: true,
-        alpha: 10,
-        beta: 30,
-        depth: 250,
-        viewDistance: 5,
-        fitToPlot: false,
-        frame: {
-          bottom: { size: 1, color: 'rgba(0,0,0,0.02)' },
-          back: { size: 1, color: 'rgba(0,0,0,0.04)' },
-          side: { size: 1, color: 'rgba(0,0,0,0.06)' }
-        }
-      }
-    },
-    title: {
-      text: title
-    },
-    subtitle: {
-      text: subtitle
-    },
-    plotOptions: {
-      series: {
-        point: {
-          events: {
-            mouseOver: function() {
-              let img1 = document.getElementById('img1')
-              let img2 = document.getElementById('img2')
+    // Add mouse and touch events for rotation
+    ;(function (H) {
+      function dragStart(eStart) {
+        eStart = chart.pointer.normalize(eStart)
 
-              let index = this.index.toString().padStart(6, '0')
+        var posX = eStart.chartX,
+          posY = eStart.chartY,
+          alpha = chart.options.chart.options3d.alpha,
+          beta = chart.options.chart.options3d.beta,
+          sensitivity = 5 // lower is more sensitive
 
-              img1.src = data[this.index].finaltimeFilepath
-              img2.src = data[this.index].vecFilepath
+        function drag(e) {
+          // Get e.chartX and e.chartY
+          e = chart.pointer.normalize(e)
 
-              // update colorbar position
-              removeMarker()
-              addMarker(Math.floor((data[this.index][colorField] - minVal) * nCells / (maxVal - minVal)))
+          chart.update({
+            chart: {
+              options3d: {
+                alpha: alpha + (e.chartY - posY) / sensitivity,
+                beta: beta + (posX - e.chartX) / sensitivity
+              }
             }
-          }
+          }, undefined, undefined, false)
         }
-      }
-    },
-    yAxis: {
-      title: {
-        text: yAxisLabel,
-        style: {
-          fontSize: `${axisLabelSize}pt`
-        }
-      }
-    },
-    xAxis: {
-      gridLineWidth: 1,
-      title: {
-        text: xAxisLabel,
-        style: {
-          fontSize: `${axisLabelSize}pt`
-        }
-      }
-    },
-    zAxis: {
-      showFirstLabel: false,
-      title: {
-        text: zAxisLabel,
-        style: {
-          fontSize: `${axisLabelSize}pt`
-        }
-      }
-    },
-    legend: {
-      enabled: false
-    },
-    series: [{
-      name: 'Parameters',
-      colorByPoint: false,
-      data: data
-    }],
-    tooltip: {
-      useHTML: true,
-      formatter: function() {
-        return getTooltip(this.point)
-      }
-    }
-  })
 
-  // Add mouse and touch events for rotation
-  ;(function (H) {
-    function dragStart(eStart) {
-      eStart = chart.pointer.normalize(eStart)
+        chart.unbindDragMouse = H.addEvent(document, 'mousemove', drag)
+        chart.unbindDragTouch = H.addEvent(document, 'touchmove', drag)
 
-      var posX = eStart.chartX,
-        posY = eStart.chartY,
-        alpha = chart.options.chart.options3d.alpha,
-        beta = chart.options.chart.options3d.beta,
-        sensitivity = 5 // lower is more sensitive
-
-      function drag(e) {
-        // Get e.chartX and e.chartY
-        e = chart.pointer.normalize(e)
-
-        chart.update({
-          chart: {
-            options3d: {
-              alpha: alpha + (e.chartY - posY) / sensitivity,
-              beta: beta + (posX - e.chartX) / sensitivity
-            }
-          }
-        }, undefined, undefined, false)
+        H.addEvent(document, 'mouseup', chart.unbindDragMouse)
+        H.addEvent(document, 'touchend', chart.unbindDragTouch)
       }
 
-      chart.unbindDragMouse = H.addEvent(document, 'mousemove', drag)
-      chart.unbindDragTouch = H.addEvent(document, 'touchmove', drag)
-
-      H.addEvent(document, 'mouseup', chart.unbindDragMouse)
-      H.addEvent(document, 'touchend', chart.unbindDragTouch)
-    }
-
-    H.addEvent(chart.container, 'mousedown', dragStart)
-    H.addEvent(chart.container, 'touchstart', dragStart)
-  }(Highcharts))
+      H.addEvent(chart.container, 'mousedown', dragStart)
+      H.addEvent(chart.container, 'touchstart', dragStart)
+    }(Highcharts))
+  }
 
   let vue = new Vue({
     el: "#app",
     data: {
       dialog: false,
       axisOptions: Object.keys(data[0]).filter(x => !(['x', 'y', 'z', 'color', 'vecFilepath', 'finaltimeFilepath'].includes(x))),
-      // TODO: prepopulate with current x, y, z, and color fields
-      xAxisInput: '',
-      yAxisInput: '',
-      zAxisInput: '',
-      colorInput: '',
+      xField: Object.keys(data[0])[0],
+      yField: Object.keys(data[0])[1],
+      zField: Object.keys(data[0])[2],
+      colorField: 'msd',
       xAxisLogarithmic: false,
       yAxisLogarithmic: false,
       zAxisLogarithmic: false,
+      colorMapper: null,
+      colorMin: null,
+      colorMax: null
     },
     methods: {
       closedDialog: function() {
         this.dialog = false
-        // update the plot
-        // TODO: need to make a new color mapper because if the colorInput changed, it's range will be different.
-        addXYZCToData(data, this.xAxisInput, this.yAxisInput, this.zAxisInput, this.colorInput)
-        chart.series[0].setData(data)
-        chart.redraw()
+
+        // I've no idea why, but getting the min only works if we first save `colorField` to a variable
+        // instead of accessing it directly as `this.colorField`
+        colorField = this.colorField
+        this.colorMin = data.reduce(function (prev, next) {return prev[colorField] < next[colorField] ? prev : next})[colorField]
+        this.colorMax = data.reduce(function (prev, next) {return prev[colorField] > next[colorField] ? prev : next})[colorField]
+        this.colorMapper = d3.scaleSequential(d3[`interpolate${colorMap}`]).domain([this.colorMin, this.colorMax])
+
+        removeMarker()
+        chartRenderer(this)
+        addColorbar(this)
       }
     }
-  })
+  });
+
+  // set up an initial chart with the starting values
+  vue.colorMin = data.reduce(function (prev, next) {return prev[vue.colorField] < next[vue.colorField] ? prev : next})[vue.colorField]
+  vue.colorMax = data.reduce(function (prev, next) {return prev[vue.colorField] > next[vue.colorField] ? prev : next})[vue.colorField]
+  vue.colorMapper = d3.scaleSequential(d3[`interpolate${colorMap}`]).domain([vue.colorMin, vue.colorMax])
+  chartRenderer(vue)
+  addColorbar(vue)
 </script>
 </body>
 </html>
